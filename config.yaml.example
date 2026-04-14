@@ -1,0 +1,19 @@
+# GeoFeed Configuration
+# Copy this file to config.yaml and fill in your API keys.
+# Alternatively, set environment variables (e.g. YOUTUBE_API_KEY).
+
+youtube:
+  api_key: ""          # Free: https://console.cloud.google.com → YouTube Data API v3
+
+flickr:
+  api_key: ""          # Free: https://www.flickr.com/services/apps/create/
+
+instagram:
+  session_cookie: ""   # Your Instagram cookie string (see README)
+
+twitter:
+  bearer_token: ""     # https://developer.twitter.com → API v2 bearer token
+
+tiktok:
+  # No API key needed — uses web scraping with reverse-geocoded place names
+  ms_token: ""         # Optional: TikTok ms_token cookie for better results

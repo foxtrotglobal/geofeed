@@ -1,0 +1,25 @@
+# Virtual environment
+.venv/
+
+# Config with secrets
+config.yaml
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Output
+results.json

@@ -534,20 +534,19 @@ class TestMastodonProvider:
     async def test_search_returns_posts(self):
         from providers.mastodon import MastodonProvider
 
-        api_response = {
-            "statuses": [
-                {
-                    "id": "mast001",
-                    "content": "<p>Testing in <a href='#'>New York</a></p>",
-                    "url": "https://mastodon.social/@user/mast001",
-                    "created_at": "2024-06-15T09:00:00Z",
-                    "account": {"acct": "user@mastodon.social"},
-                    "media_attachments": [
-                        {"type": "image", "preview_url": "https://mastodon.social/preview.jpg"}
-                    ],
-                }
-            ]
-        }
+        # Mastodon now uses the hashtag timeline (returns a list, not dict)
+        api_response = [
+            {
+                "id": "mast001",
+                "content": "<p>Testing in <a href='#'>New York</a></p>",
+                "url": "https://mastodon.social/@user/mast001",
+                "created_at": "2024-06-15T09:00:00Z",
+                "account": {"acct": "user@mastodon.social"},
+                "media_attachments": [
+                    {"type": "image", "preview_url": "https://mastodon.social/preview.jpg"}
+                ],
+            }
+        ]
 
         mock_client = _mock_async_client(_mock_http_response(api_response))
         with patch("providers.mastodon.config") as mock_config, \
@@ -561,25 +560,23 @@ class TestMastodonProvider:
         assert posts[0].platform == "mastodon"
         assert posts[0].post_id == "mast001"
         assert posts[0].author == "user@mastodon.social"
-        assert "Testing in" in posts[0].text   # HTML stripped
-        assert "<p>" not in posts[0].text       # HTML removed
+        assert "Testing in" in posts[0].text
+        assert "<p>" not in posts[0].text
         assert posts[0].media_url == "https://mastodon.social/preview.jpg"
 
     @pytest.mark.asyncio
     async def test_search_strips_html(self):
         from providers.mastodon import MastodonProvider
 
-        api_response = {
-            "statuses": [
-                {
-                    "id": "mast002",
-                    "content": "<p><strong>Bold</strong> and <em>italic</em> text.</p>",
-                    "url": "",
-                    "account": {"acct": "tester"},
-                    "media_attachments": [],
-                }
-            ]
-        }
+        api_response = [
+            {
+                "id": "mast002",
+                "content": "<p><strong>Bold</strong> and <em>italic</em> text.</p>",
+                "url": "",
+                "account": {"acct": "tester"},
+                "media_attachments": [],
+            }
+        ]
 
         mock_client = _mock_async_client(_mock_http_response(api_response))
         with patch("providers.mastodon.config") as mock_config, \
@@ -765,12 +762,14 @@ class TestTelegramProvider:
         assert "Tehran" in posts[0].text
 
     @pytest.mark.asyncio
-    async def test_search_filters_non_matching_posts(self):
+    async def test_search_includes_recent_posts_when_no_keyword_match(self):
+        """When no posts match the location keyword, recent posts are still returned
+        so the channel shows something rather than nothing."""
         from providers.telegram import TelegramProvider
 
         html = '''
-        <div class="tgme_widget_message">
-          <div class="tgme_widget_message_text">Unrelated content about sports</div>
+        <div data-post="bbcpersian/1" class="tgme_widget_message">
+          <div class="tgme_widget_message_text js-message_text">Unrelated content about sports</div>
           <time datetime="2024-06-15T10:00:00+00:00">10:00</time>
         </div>
         '''
@@ -791,7 +790,9 @@ class TestTelegramProvider:
             provider.channels = ["bbcpersian"]
             posts = await provider.search(PARAMS)
 
-        assert posts == []
+        # Non-matching posts are now included when total matches < 5
+        assert len(posts) == 1
+        assert posts[0].platform == "telegram"
 
     def test_always_configured(self):
         from providers.telegram import TelegramProvider

@@ -9,7 +9,12 @@ from geo import reverse_geocode
 from models import GeoPost, SearchParams
 from providers.base import BaseProvider
 
-SEARCH_URL = "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts"
+# Try endpoints in order — public.api.bsky.app is Cloudflare-protected
+SEARCH_URLS = [
+    "https://api.bsky.app/xrpc/app.bsky.feed.searchPosts",
+    "https://bsky.social/xrpc/app.bsky.feed.searchPosts",
+    "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts",
+]
 
 
 class BlueskyProvider(BaseProvider):
@@ -29,22 +34,31 @@ class BlueskyProvider(BaseProvider):
         place_name = await reverse_geocode(params.latitude, params.longitude)
         query = f"{params.keyword} {place_name}".strip() if params.keyword else place_name
 
-        headers = {"Accept": "application/json"}
+        headers = {
+            "Accept": "application/json",
+            "User-Agent": "GeoFeed/1.2 (https://github.com/foxtrotglobal/geofeed)",
+            "atproto-proxy": "did:web:api.bsky.app#bsky_appview",
+        }
         query_params = {
             "q": query,
-            "limit": min(params.max_results, 100),
+            "limit": min(params.max_results, 25),
             "sort": "latest",
+            "lang": "en",
         }
 
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    SEARCH_URL, params=query_params, headers=headers, timeout=15
-                )
-                if resp.status_code != 200:
-                    return []
-                data = resp.json()
-        except Exception:
+        data = None
+        async with httpx.AsyncClient() as client:
+            for url in SEARCH_URLS:
+                try:
+                    resp = await client.get(
+                        url, params=query_params, headers=headers, timeout=10
+                    )
+                    if resp.status_code == 200 and resp.content:
+                        data = resp.json()
+                        break
+                except Exception:
+                    continue
+        if not data:
             return []
 
         posts = []

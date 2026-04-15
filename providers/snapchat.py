@@ -8,8 +8,11 @@ import config
 from models import GeoPost, SearchParams
 from providers.base import BaseProvider
 
-# Snap Map public tile endpoint — returns public "Our Story" snaps near a location
-SNAP_MAP_URL = "https://ms.sc-cdn.net/v2/slide/map"
+# Snap Map story search endpoints (try in order)
+SNAP_MAP_URLS = [
+    "https://ms.sc-cdn.net/v2/slide/map",
+    "https://story.snapchat.com/m/nearby",
+]
 
 
 class SnapchatProvider(BaseProvider):
@@ -46,19 +49,23 @@ class SnapchatProvider(BaseProvider):
             "Accept": "application/json",
         }
 
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    SNAP_MAP_URL,
-                    params=query_params,
-                    headers=headers,
-                    timeout=15,
-                    follow_redirects=True,
-                )
-                if resp.status_code != 200:
-                    return []
-                data = resp.json()
-        except Exception:
+        data = None
+        async with httpx.AsyncClient() as client:
+            for url in SNAP_MAP_URLS:
+                try:
+                    resp = await client.get(
+                        url,
+                        params=query_params,
+                        headers=headers,
+                        timeout=10,
+                        follow_redirects=True,
+                    )
+                    if resp.status_code == 200 and resp.content:
+                        data = resp.json()
+                        break
+                except Exception:
+                    continue
+        if not data:
             return []
 
         posts = []

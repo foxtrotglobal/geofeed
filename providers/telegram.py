@@ -119,14 +119,12 @@ class TelegramProvider(BaseProvider):
         timestamps = _TIME_RE.findall(html)
         msg_ids = _MSG_ID_RE.findall(html)
 
+        matched = []
+        all_recent = []
+
         for i, raw_text in enumerate(msg_texts):
             text = unescape(_TAG_RE.sub("", raw_text)).strip()
             if not text:
-                continue
-
-            # Filter: must mention at least one location keyword
-            text_lower = text.lower()
-            if not any(kw in text_lower for kw in keywords):
                 continue
 
             ts = None
@@ -139,7 +137,7 @@ class TelegramProvider(BaseProvider):
             msg_id = msg_ids[i] if i < len(msg_ids) else f"{channel}_{i}"
             url = f"https://t.me/{msg_id}" if "/" in msg_id else f"https://t.me/{channel}"
 
-            posts.append(GeoPost(
+            post = GeoPost(
                 platform="telegram",
                 post_id=msg_id,
                 url=url,
@@ -149,6 +147,11 @@ class TelegramProvider(BaseProvider):
                 longitude=params.longitude,
                 location_name=place_name,
                 timestamp=ts,
-            ))
+            )
+            all_recent.append(post)
+            text_lower = text.lower()
+            if any(kw in text_lower for kw in keywords):
+                matched.append(post)
 
-        return posts
+        # Return keyword-matched posts; fall back to recent posts if nothing matched
+        return matched if matched else all_recent

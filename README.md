@@ -2,6 +2,7 @@
 
 Search multiple social media platforms for content posted near GPS coordinates and visualize results on an interactive map.
 
+![Tests](https://github.com/foxtrotglobal/geofeed/actions/workflows/tests.yml/badge.svg)
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 

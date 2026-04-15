@@ -1,10 +1,22 @@
 # GeoFeed
 
-Search multiple social media platforms for content posted near GPS coordinates and visualize results on an interactive map.
-
 ![Tests](https://github.com/foxtrotglobal/geofeed/actions/workflows/tests.yml/badge.svg)
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
+
+## About
+
+GeoFeed is an open-source Python tool that searches **YouTube, Flickr, Instagram, X/Twitter, and TikTok** simultaneously for public content posted near a pair of GPS coordinates. Results are aggregated into a unified format and displayed as color-coded markers on an interactive map, with clickable popups showing post previews, thumbnails, authors, and timestamps.
+
+It is designed for researchers, journalists, OSINT investigators, event monitors, or anyone who wants to understand what is being posted in a specific physical location across multiple platforms at once.
+
+**Key features:**
+- Search up to 5 platforms in parallel with a single command
+- Interactive Leaflet.js map with color-coded markers per platform
+- CLI for scripting and JSON export, or a web UI for visual exploration
+- Pluggable provider architecture — easy to add new platforms
+- 31-test suite with fully mocked HTTP — no API keys needed to run tests
+- No database required — stateless, runs locally
 
 ## Supported Platforms
 
@@ -16,24 +28,42 @@ Search multiple social media platforms for content posted near GPS coordinates a
 | **X / Twitter** | API v2 `point_radius` query | Exact | Bearer token (paid tier) |
 | **TikTok** | Reverse-geocode → keyword search | Approximate | None (web scraping) |
 
-## Quick Start
+## Installation
 
-### 1. Clone & set up the environment
+### Prerequisites
+
+- **Python 3.11 or higher** — check with `python3 --version`
+- **git** — to clone the repository
+- At least one API key (see [Getting API Keys](#getting-api-keys)) — TikTok works without any
+
+### 1. Clone the repository
 
 ```bash
+git clone https://github.com/foxtrotglobal/geofeed.git
 cd geofeed
+```
+
+### 2. Create a virtual environment
+
+```bash
 python3 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate      # macOS / Linux
+.venv\Scripts\activate         # Windows
+```
+
+### 3. Install dependencies
+
+```bash
 pip install -r requirements.txt
 ```
 
-### 2. Configure API keys
+### 4. Configure API keys
 
 ```bash
 cp config.yaml.example config.yaml
 ```
 
-Edit `config.yaml` and add your credentials. You only need keys for the platforms you want to use — unconfigured platforms are skipped automatically.
+Edit `config.yaml` and add credentials for the platforms you want to use. Unconfigured platforms are skipped automatically — you do not need all of them.
 
 ```yaml
 youtube:
@@ -52,9 +82,9 @@ tiktok:
   ms_token: ""  # Optional — improves results but not required
 ```
 
-Alternatively, set environment variables instead of using the config file (e.g. `YOUTUBE_API_KEY`, `FLICKR_API_KEY`, etc.).
+You can also use environment variables instead of the config file (e.g. `YOUTUBE_API_KEY`, `FLICKR_API_KEY`). Environment variables take precedence over `config.yaml`.
 
-### 3. Run
+### 5. Run
 
 **Web UI (recommended):**
 
@@ -62,7 +92,7 @@ Alternatively, set environment variables instead of using the config file (e.g. 
 python main.py --server
 ```
 
-Open [http://localhost:5000](http://localhost:5000). Click anywhere on the map to set coordinates, choose platforms, and search.
+Open [http://localhost:5000](http://localhost:5000). Click anywhere on the map to set coordinates, choose platforms, and hit Search.
 
 **CLI:**
 
@@ -72,6 +102,15 @@ python main.py --lat 40.7580 --lng -73.9855 --radius 5
 
 # Search with keyword, specific platforms, save to JSON
 python main.py --lat 48.8566 --lng 2.3522 -k "Eiffel Tower" -p youtube flickr --json results.json
+```
+
+## Running Tests
+
+No API keys are needed — all HTTP calls are mocked.
+
+```bash
+pip install pytest pytest-asyncio
+pytest -v
 ```
 
 ## CLI Reference

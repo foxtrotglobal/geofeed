@@ -20,6 +20,10 @@ from providers.bluesky import BlueskyProvider
 from providers.mastodon import MastodonProvider
 from providers.snapchat import SnapchatProvider
 from providers.facebook import FacebookProvider
+from providers.telegram import TelegramProvider
+from providers.aparat import AparatProvider
+from providers.rubika import RubikaProvider
+from providers.reddit import RedditProvider
 
 ALL_PROVIDERS = {
     "youtube": YouTubeProvider,
@@ -31,6 +35,10 @@ ALL_PROVIDERS = {
     "mastodon": MastodonProvider,
     "snapchat": SnapchatProvider,
     "facebook": FacebookProvider,
+    "telegram": TelegramProvider,
+    "aparat": AparatProvider,
+    "rubika": RubikaProvider,
+    "reddit": RedditProvider,
 }
 
 PLATFORM_NAMES = list(ALL_PROVIDERS.keys())

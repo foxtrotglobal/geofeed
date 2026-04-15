@@ -723,3 +723,247 @@ class TestFacebookProvider:
         with patch("providers.facebook.config") as mock_config:
             mock_config.get.side_effect = lambda s, k: "val"
             assert FacebookProvider().is_configured() is True
+
+
+# ============================================================
+# Telegram
+# ============================================================
+
+
+class TestTelegramProvider:
+    @pytest.mark.asyncio
+    async def test_search_returns_matching_posts(self):
+        from providers.telegram import TelegramProvider
+
+        # Simulate a t.me/s/channel HTML page with one matching message
+        html = '''
+        <div data-post="bbcpersian/999" class="tgme_widget_message">
+          <div class="tgme_widget_message_text js-message_text">Tehran protests today</div>
+          <time class="time" datetime="2024-06-15T10:00:00+00:00">10:00</time>
+        </div>
+        '''
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = html
+
+        client = AsyncMock()
+        client.get.return_value = resp
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("providers.telegram.config") as mock_config, \
+             patch("providers.telegram.reverse_geocode", return_value="Tehran"), \
+             patch("providers.telegram.httpx.AsyncClient", return_value=client):
+            mock_config.get.return_value = ""
+            provider = TelegramProvider()
+            provider.channels = ["bbcpersian"]
+            posts = await provider.search(PARAMS)
+
+        assert len(posts) == 1
+        assert posts[0].platform == "telegram"
+        assert posts[0].author == "@bbcpersian"
+        assert "Tehran" in posts[0].text
+
+    @pytest.mark.asyncio
+    async def test_search_filters_non_matching_posts(self):
+        from providers.telegram import TelegramProvider
+
+        html = '''
+        <div class="tgme_widget_message">
+          <div class="tgme_widget_message_text">Unrelated content about sports</div>
+          <time datetime="2024-06-15T10:00:00+00:00">10:00</time>
+        </div>
+        '''
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = html
+
+        client = AsyncMock()
+        client.get.return_value = resp
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("providers.telegram.config") as mock_config, \
+             patch("providers.telegram.reverse_geocode", return_value="Tehran"), \
+             patch("providers.telegram.httpx.AsyncClient", return_value=client):
+            mock_config.get.return_value = ""
+            provider = TelegramProvider()
+            provider.channels = ["bbcpersian"]
+            posts = await provider.search(PARAMS)
+
+        assert posts == []
+
+    def test_always_configured(self):
+        from providers.telegram import TelegramProvider
+
+        with patch("providers.telegram.config") as mock_config:
+            mock_config.get.return_value = ""
+            assert TelegramProvider().is_configured() is True
+
+
+# ============================================================
+# Aparat
+# ============================================================
+
+
+class TestAparatProvider:
+    @pytest.mark.asyncio
+    async def test_search_returns_posts(self):
+        from providers.aparat import AparatProvider
+
+        api_response = {
+            "data": [
+                {
+                    "id": "abc123",
+                    "attributes": {
+                        "title": "Tehran street view",
+                        "username": "iranvlogger",
+                        "big_poster": "https://aparat.com/thumb.jpg",
+                        "create_date": "2024-06-15T12:00:00",
+                    },
+                }
+            ]
+        }
+
+        mock_client = _mock_async_client(_mock_http_response(api_response))
+        with patch("providers.aparat.reverse_geocode", return_value="Tehran"), \
+             patch("providers.aparat.httpx.AsyncClient", return_value=mock_client):
+            provider = AparatProvider()
+            posts = await provider.search(PARAMS)
+
+        assert len(posts) == 1
+        assert posts[0].platform == "aparat"
+        assert posts[0].text == "Tehran street view"
+        assert posts[0].author == "iranvlogger"
+        assert posts[0].url == "https://www.aparat.com/v/abc123"
+
+    @pytest.mark.asyncio
+    async def test_search_returns_empty_on_error(self):
+        from providers.aparat import AparatProvider
+
+        mock_client = _mock_async_client(_mock_http_response({}, status_code=503))
+        with patch("providers.aparat.reverse_geocode", return_value="Tehran"), \
+             patch("providers.aparat.httpx.AsyncClient", return_value=mock_client):
+            posts = await AparatProvider().search(PARAMS)
+
+        assert posts == []
+
+    def test_always_configured(self):
+        from providers.aparat import AparatProvider
+        assert AparatProvider().is_configured() is True
+
+
+# ============================================================
+# Rubika
+# ============================================================
+
+
+class TestRubikaProvider:
+    @pytest.mark.asyncio
+    async def test_search_returns_posts_from_api(self):
+        from providers.rubika import RubikaProvider
+
+        api_response = {
+            "posts": [
+                {
+                    "id": "rub001",
+                    "text": "Tehran news today",
+                    "author": {"username": "rubikauser"},
+                    "thumbnail": "https://rubika.ir/thumb.jpg",
+                    "created_at": "2024-06-15T10:00:00",
+                }
+            ]
+        }
+
+        mock_client = _mock_async_client(_mock_http_response(api_response))
+        with patch("providers.rubika.reverse_geocode", return_value="Tehran"), \
+             patch("providers.rubika.httpx.AsyncClient", return_value=mock_client):
+            posts = await RubikaProvider().search(PARAMS)
+
+        assert len(posts) == 1
+        assert posts[0].platform == "rubika"
+        assert posts[0].post_id == "rub001"
+        assert posts[0].author == "rubikauser"
+
+    @pytest.mark.asyncio
+    async def test_search_returns_empty_gracefully(self):
+        from providers.rubika import RubikaProvider
+
+        mock_client = _mock_async_client(_mock_http_response({}, status_code=404))
+        with patch("providers.rubika.reverse_geocode", return_value="Tehran"), \
+             patch("providers.rubika.httpx.AsyncClient", return_value=mock_client):
+            posts = await RubikaProvider().search(PARAMS)
+
+        assert posts == []
+
+    def test_always_configured(self):
+        from providers.rubika import RubikaProvider
+        assert RubikaProvider().is_configured() is True
+
+
+# ============================================================
+# Reddit
+# ============================================================
+
+
+class TestRedditProvider:
+    @pytest.mark.asyncio
+    async def test_search_returns_posts(self):
+        from providers.reddit import RedditProvider
+
+        api_response = {
+            "data": {
+                "children": [
+                    {
+                        "data": {
+                            "id": "red001",
+                            "title": "Protests in Tehran today",
+                            "selftext": "Large crowds gathered...",
+                            "author": "redditor99",
+                            "subreddit": "iran",
+                            "permalink": "/r/iran/comments/red001/",
+                            "thumbnail": "https://reddit.com/thumb.jpg",
+                            "created_utc": 1718450000.0,
+                        }
+                    }
+                ]
+            }
+        }
+
+        mock_client = _mock_async_client(_mock_http_response(api_response))
+        with patch("providers.reddit.config") as mock_config, \
+             patch("providers.reddit.reverse_geocode", return_value="Tehran"), \
+             patch("providers.reddit.httpx.AsyncClient", return_value=mock_client):
+            mock_config.get.return_value = ""
+            provider = RedditProvider()
+            provider.subreddits = []  # Skip subreddit searches in this test
+            posts = await provider.search(PARAMS)
+
+        assert len(posts) == 1
+        assert posts[0].platform == "reddit"
+        assert posts[0].post_id == "red001"
+        assert posts[0].author == "u/redditor99"
+        assert "Tehran" in posts[0].text
+        assert posts[0].url == "https://www.reddit.com/r/iran/comments/red001/"
+
+    @pytest.mark.asyncio
+    async def test_search_handles_rate_limit(self):
+        from providers.reddit import RedditProvider
+
+        mock_client = _mock_async_client(_mock_http_response({}, status_code=429))
+        with patch("providers.reddit.config") as mock_config, \
+             patch("providers.reddit.reverse_geocode", return_value="Tehran"), \
+             patch("providers.reddit.httpx.AsyncClient", return_value=mock_client):
+            mock_config.get.return_value = ""
+            provider = RedditProvider()
+            provider.subreddits = []
+            posts = await provider.search(PARAMS)
+
+        assert posts == []
+
+    def test_always_configured(self):
+        from providers.reddit import RedditProvider
+
+        with patch("providers.reddit.config") as mock_config:
+            mock_config.get.return_value = ""
+            assert RedditProvider().is_configured() is True

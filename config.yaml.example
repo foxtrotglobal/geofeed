@@ -35,3 +35,24 @@ facebook:
   app_secret: ""       # App Secret from the same page
   # Note: public post search was removed in Graph API v2.0.
   # This searches nearby Places and their public feeds.
+
+telegram:
+  # No credentials needed — scrapes public channels via t.me/s/
+  bot_token: ""        # Optional: Bot token from @BotFather for extended lookup
+  channels:            # Optional: override the default channel list
+    # - irna_ir
+    # - bbcpersian
+    # - mychannel
+
+aparat:
+  # No credentials needed — uses Aparat public search API
+
+rubika:
+  # No credentials needed — searches Rubika public content
+
+reddit:
+  # No credentials needed for public search
+  client_id: ""        # Optional: Reddit app client ID for higher rate limits
+  client_secret: ""    # Optional: Reddit app client secret
+  subreddits: ""       # Optional: comma-separated list to override defaults
+                       # Default: iran,tehran,middleeast,worldnews,news

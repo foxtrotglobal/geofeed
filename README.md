@@ -228,6 +228,107 @@ All providers implement the same `BaseProvider` interface and run in parallel vi
 2. Subclass `BaseProvider` and implement `search()` and `is_configured()`
 3. Register it in `server.py` and `main.py` under `ALL_PROVIDERS`
 
+## Deployment
+### Option A — VPS (Ubuntu 22.04+)
+**1. Clone and set up:**
+```bash
+git clone https://github.com/foxtrotglobal/geofeed.git
+cd geofeed
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt gunicorn
+cp config.yaml.example config.yaml
+# Edit config.yaml with your API keys
+```
+**2. Create a systemd service** at `/etc/systemd/system/geofeed.service`:
+```ini
+[Unit]
+Description=GeoFeed
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/geofeed
+ExecStart=/home/ubuntu/geofeed/.venv/bin/gunicorn -w 4 -b 0.0.0.0:5000 server:app
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+**3. Enable and start:**
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable geofeed
+sudo systemctl start geofeed
+sudo systemctl status geofeed
+```
+**4. Set up Nginx as reverse proxy** at `/etc/nginx/sites-available/geofeed`:
+```nginx
+server {
+    listen 80;
+    server_name yourdomain.com;
+
+    add_header X-Frame-Options SAMEORIGIN;
+    add_header X-Content-Type-Options nosniff;
+
+    location / {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;        # Required for SSE live mode
+        proxy_cache off;
+        proxy_read_timeout 300s;
+        proxy_set_header X-Accel-Buffering no;
+    }
+}
+```
+**5. Enable site and obtain HTTPS certificate:**
+```bash
+sudo ln -s /etc/nginx/sites-available/geofeed /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+sudo apt install certbot python3-certbot-nginx -y
+sudo certbot --nginx -d yourdomain.com
+```
+**6. Lock down the firewall:**
+```bash
+sudo ufw allow 'Nginx Full'
+sudo ufw delete allow 5000
+```
+**7. Verify the deployment:**
+```bash
+sudo systemctl status nginx geofeed
+curl -I https://yourdomain.com
+```
+### Option B — Docker
+Add a `Dockerfile` to the project root:
+```dockerfile
+FROM python:3.12-slim
+WORKDIR /app
+COPY . .
+RUN pip install -r requirements.txt gunicorn
+EXPOSE 5000
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "server:app"]
+```
+```bash
+docker build -t geofeed .
+docker run -p 5000:5000 \
+  -e YOUTUBE_API_KEY=your_key \
+  -e FLICKR_API_KEY=your_key \
+  geofeed
+```
+### Option C — Render / Railway / Heroku
+Set your API keys as environment variables on the platform dashboard (no `config.yaml` needed — the app reads env vars automatically). Use this start command:
+```
+gunicorn -w 2 -b 0.0.0.0:$PORT server:app
+```
+### Production tips
+- Use environment variables for all API keys — never commit `config.yaml`
+- Add `--max-results 20` to limit parallel API load across 13 platforms
+- `proxy_buffering off` in Nginx is required for the SSE live mode to work
+- View logs: `sudo journalctl -u geofeed -f`
+- Restart after changes: `sudo systemctl restart geofeed`
 ## Limitations
 
 - **Instagram** requires a valid session cookie that may expire or get invalidated

@@ -27,6 +27,10 @@ It is designed for researchers, journalists, OSINT investigators, event monitors
 | **Instagram** | Internal location search endpoint | Nearby venues | Session cookie |
 | **X / Twitter** | API v2 `point_radius` query | Exact | Bearer token (paid tier) |
 | **TikTok** | Reverse-geocode → keyword search | Approximate | None (web scraping) |
+| **Bluesky** | AT Protocol `feed.searchPosts` | Approximate | None (public API) |
+| **Mastodon** | Instance `api/v2/search` | Approximate | None (public API) |
+| **Snapchat** | Snap Map public endpoint | Exact | None (public) |
+| **Facebook** | Graph API Place search + feed | Nearby venues | App ID + App Secret |
 
 ## Installation
 
@@ -93,6 +97,8 @@ python main.py --server
 ```
 
 Open [http://localhost:5000](http://localhost:5000). Click anywhere on the map to set coordinates, choose platforms, and hit Search.
+
+**Live mode** — enable the 🟢 Live toggle in the UI to automatically re-poll every N seconds and push new results to the map as they arrive.
 
 **CLI:**
 
@@ -173,6 +179,24 @@ The web interface features:
 ### TikTok
 
 No credentials required. TikTok search uses web scraping with reverse-geocoded place names. Optionally, add an `ms_token` cookie from your browser for better results.
+
+### Bluesky
+
+No credentials required. Uses the public AT Protocol API. Optionally add your handle and an [App Password](https://bsky.app/settings/app-passwords) in `config.yaml` for higher rate limits.
+
+### Mastodon
+
+No credentials required. Searches `mastodon.social` by default. Set `instance` in `config.yaml` to search a different Mastodon instance.
+
+### Snapchat
+
+No credentials required. Uses the public Snap Map endpoint to find nearby public "Our Story" snaps.
+
+### Facebook
+
+1. Go to [developers.facebook.com](https://developers.facebook.com/) and create an app
+2. Copy the **App ID** and **App Secret** into `config.yaml`
+3. **Note:** Public post search was removed in Graph API v2.0 (2015). This provider finds nearby Places and fetches their public page feeds only.
 
 ## Architecture
 

@@ -1,10 +1,12 @@
 """Flask web server for GeoFeed — serves the map UI and search API."""
 
 import asyncio
+import json
 import sys
+import time
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request
 
 # Ensure the project root is on the path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -16,6 +18,10 @@ from providers.flickr import FlickrProvider
 from providers.instagram import InstagramProvider
 from providers.twitter import TwitterProvider
 from providers.tiktok import TikTokProvider
+from providers.bluesky import BlueskyProvider
+from providers.mastodon import MastodonProvider
+from providers.snapchat import SnapchatProvider
+from providers.facebook import FacebookProvider
 
 app = Flask(__name__)
 
@@ -26,6 +32,10 @@ ALL_PROVIDERS = {
     "instagram": InstagramProvider,
     "twitter": TwitterProvider,
     "tiktok": TikTokProvider,
+    "bluesky": BlueskyProvider,
+    "mastodon": MastodonProvider,
+    "snapchat": SnapchatProvider,
+    "facebook": FacebookProvider,
 }
 
 
@@ -106,6 +116,41 @@ def list_providers():
         p = cls()
         result[name] = {"configured": p.is_configured(), "color": p.color}
     return jsonify(result)
+
+
+@app.route("/api/stream")
+def stream():
+    """SSE endpoint — re-runs the search every `interval` seconds and pushes new posts."""
+    try:
+        lat = float(request.args["latitude"])
+        lng = float(request.args["longitude"])
+        radius = float(request.args.get("radius_km", 10))
+        keyword = request.args.get("keyword", "")
+        interval = max(int(request.args.get("interval", 60)), 10)  # min 10s
+        platforms = request.args.getlist("platforms") or list(ALL_PROVIDERS.keys())
+    except (KeyError, ValueError) as e:
+        return jsonify({"error": str(e)}), 400
+
+    params = SearchParams(
+        latitude=lat, longitude=lng, radius_km=radius, keyword=keyword
+    )
+
+    def generate():
+        seen_ids: set = set()
+        while True:
+            loop = get_or_create_event_loop()
+            posts = loop.run_until_complete(run_search(params, platforms))
+            new_posts = [p for p in posts if p["post_id"] not in seen_ids]
+            for p in new_posts:
+                seen_ids.add(p["post_id"])
+            if new_posts:
+                yield f"data: {json.dumps(new_posts)}\n\n"
+            else:
+                yield "data: []\n\n"
+            time.sleep(interval)
+
+    return Response(generate(), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 if __name__ == "__main__":

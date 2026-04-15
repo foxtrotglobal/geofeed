@@ -16,6 +16,10 @@ from providers.flickr import FlickrProvider
 from providers.instagram import InstagramProvider
 from providers.twitter import TwitterProvider
 from providers.tiktok import TikTokProvider
+from providers.bluesky import BlueskyProvider
+from providers.mastodon import MastodonProvider
+from providers.snapchat import SnapchatProvider
+from providers.facebook import FacebookProvider
 
 ALL_PROVIDERS = {
     "youtube": YouTubeProvider,
@@ -23,6 +27,10 @@ ALL_PROVIDERS = {
     "instagram": InstagramProvider,
     "twitter": TwitterProvider,
     "tiktok": TikTokProvider,
+    "bluesky": BlueskyProvider,
+    "mastodon": MastodonProvider,
+    "snapchat": SnapchatProvider,
+    "facebook": FacebookProvider,
 }
 
 PLATFORM_NAMES = list(ALL_PROVIDERS.keys())
@@ -86,6 +94,8 @@ def main():
     parser.add_argument("--json", dest="json_output", metavar="FILE", help="Save results to a JSON file")
     parser.add_argument("--server", action="store_true", help="Start the web UI instead of CLI search")
     parser.add_argument("--port", type=int, default=5000, help="Port for web server (default: 5000)")
+    parser.add_argument("--live", action="store_true", help="Re-poll continuously and print new results")
+    parser.add_argument("--interval", type=int, default=60, help="Polling interval for --live mode in seconds (default: 60)")
     parser.add_argument("--config", metavar="FILE", help="Path to config.yaml")
 
     args = parser.parse_args()
@@ -114,6 +124,23 @@ def main():
     )
 
     print(f"📍 Searching near ({args.lat}, {args.lng}), radius {args.radius} km", file=sys.stderr)
+
+    if args.live:
+        import time
+        print(f"🟢 Live mode — polling every {args.interval}s. Press Ctrl+C to stop.", file=sys.stderr)
+        seen_ids: set = set()
+        while True:
+            posts = asyncio.run(run_search(params, args.platforms))
+            new_posts = [p for p in posts if p["post_id"] not in seen_ids]
+            for p in new_posts:
+                seen_ids.add(p["post_id"])
+                print(f"[{p['platform']}] {p.get('text', '')[:80]}")
+                print(f"  👤 @{p.get('author', '?')}  📍 {p.get('location_name', '')}")
+                print(f"  🔗 {p.get('url', '')}")
+                print()
+            print(f"  [⏳ {len(new_posts)} new | {len(seen_ids)} total — next poll in {args.interval}s]", file=sys.stderr)
+            time.sleep(args.interval)
+        return
 
     posts = asyncio.run(run_search(params, args.platforms))
 

@@ -463,3 +463,263 @@ class TestTikTokProvider:
         with patch("providers.tiktok.config") as mock_config:
             mock_config.get.return_value = ""
             assert TikTokProvider().is_configured() is True
+
+
+# ============================================================
+# Bluesky
+# ============================================================
+
+
+class TestBlueskyProvider:
+    @pytest.mark.asyncio
+    async def test_search_returns_posts(self):
+        from providers.bluesky import BlueskyProvider
+
+        api_response = {
+            "posts": [
+                {
+                    "uri": "at://did:plc:abc/app.bsky.feed.post/rkey123",
+                    "record": {"text": "Hello from New York!", "createdAt": "2024-06-15T10:00:00Z"},
+                    "author": {"handle": "user.bsky.social"},
+                    "indexedAt": "2024-06-15T10:00:00Z",
+                    "embed": {"images": [{"thumb": "https://bsky.app/thumb.jpg"}]},
+                }
+            ]
+        }
+
+        mock_client = _mock_async_client(_mock_http_response(api_response))
+        with patch("providers.bluesky.config") as mock_config, \
+             patch("providers.bluesky.reverse_geocode", return_value="New York"), \
+             patch("providers.bluesky.httpx.AsyncClient", return_value=mock_client):
+            mock_config.get.return_value = ""
+            provider = BlueskyProvider()
+            posts = await provider.search(PARAMS)
+
+        assert len(posts) == 1
+        assert posts[0].platform == "bluesky"
+        assert posts[0].author == "user.bsky.social"
+        assert posts[0].text == "Hello from New York!"
+        assert "user.bsky.social" in posts[0].url
+        assert "rkey123" in posts[0].url
+        assert posts[0].media_url == "https://bsky.app/thumb.jpg"
+
+    @pytest.mark.asyncio
+    async def test_search_returns_empty_on_error(self):
+        from providers.bluesky import BlueskyProvider
+
+        mock_client = _mock_async_client(_mock_http_response({}, status_code=500))
+        with patch("providers.bluesky.config") as mock_config, \
+             patch("providers.bluesky.reverse_geocode", return_value="Paris"), \
+             patch("providers.bluesky.httpx.AsyncClient", return_value=mock_client):
+            mock_config.get.return_value = ""
+            posts = await BlueskyProvider().search(PARAMS)
+
+        assert posts == []
+
+    def test_always_configured(self):
+        from providers.bluesky import BlueskyProvider
+
+        with patch("providers.bluesky.config") as mock_config:
+            mock_config.get.return_value = ""
+            assert BlueskyProvider().is_configured() is True
+
+
+# ============================================================
+# Mastodon
+# ============================================================
+
+
+class TestMastodonProvider:
+    @pytest.mark.asyncio
+    async def test_search_returns_posts(self):
+        from providers.mastodon import MastodonProvider
+
+        api_response = {
+            "statuses": [
+                {
+                    "id": "mast001",
+                    "content": "<p>Testing in <a href='#'>New York</a></p>",
+                    "url": "https://mastodon.social/@user/mast001",
+                    "created_at": "2024-06-15T09:00:00Z",
+                    "account": {"acct": "user@mastodon.social"},
+                    "media_attachments": [
+                        {"type": "image", "preview_url": "https://mastodon.social/preview.jpg"}
+                    ],
+                }
+            ]
+        }
+
+        mock_client = _mock_async_client(_mock_http_response(api_response))
+        with patch("providers.mastodon.config") as mock_config, \
+             patch("providers.mastodon.reverse_geocode", return_value="New York"), \
+             patch("providers.mastodon.httpx.AsyncClient", return_value=mock_client):
+            mock_config.get.return_value = ""
+            provider = MastodonProvider()
+            posts = await provider.search(PARAMS)
+
+        assert len(posts) == 1
+        assert posts[0].platform == "mastodon"
+        assert posts[0].post_id == "mast001"
+        assert posts[0].author == "user@mastodon.social"
+        assert "Testing in" in posts[0].text   # HTML stripped
+        assert "<p>" not in posts[0].text       # HTML removed
+        assert posts[0].media_url == "https://mastodon.social/preview.jpg"
+
+    @pytest.mark.asyncio
+    async def test_search_strips_html(self):
+        from providers.mastodon import MastodonProvider
+
+        api_response = {
+            "statuses": [
+                {
+                    "id": "mast002",
+                    "content": "<p><strong>Bold</strong> and <em>italic</em> text.</p>",
+                    "url": "",
+                    "account": {"acct": "tester"},
+                    "media_attachments": [],
+                }
+            ]
+        }
+
+        mock_client = _mock_async_client(_mock_http_response(api_response))
+        with patch("providers.mastodon.config") as mock_config, \
+             patch("providers.mastodon.reverse_geocode", return_value="Somewhere"), \
+             patch("providers.mastodon.httpx.AsyncClient", return_value=mock_client):
+            mock_config.get.return_value = ""
+            posts = await MastodonProvider().search(PARAMS)
+
+        assert "<" not in posts[0].text
+        assert "Bold" in posts[0].text
+
+    def test_always_configured(self):
+        from providers.mastodon import MastodonProvider
+
+        with patch("providers.mastodon.config") as mock_config:
+            mock_config.get.return_value = ""
+            assert MastodonProvider().is_configured() is True
+
+
+# ============================================================
+# Snapchat
+# ============================================================
+
+
+class TestSnapchatProvider:
+    @pytest.mark.asyncio
+    async def test_search_returns_posts(self):
+        from providers.snapchat import SnapchatProvider
+
+        api_response = {
+            "elements": [
+                {
+                    "id": "snap001",
+                    "title": "Times Square",
+                    "timestamp": "1718450000000",
+                    "location": {"lat": 40.758, "lng": -73.9855},
+                    "placeInfo": {"name": "Times Square, NY"},
+                    "snapInfo": {
+                        "previewImageMediaInfo": {"mediaUrl": "https://snap.com/preview.jpg"}
+                    },
+                }
+            ]
+        }
+
+        mock_client = _mock_async_client(_mock_http_response(api_response))
+        with patch("providers.snapchat.httpx.AsyncClient", return_value=mock_client):
+            provider = SnapchatProvider()
+            posts = await provider.search(PARAMS)
+
+        assert len(posts) == 1
+        assert posts[0].platform == "snapchat"
+        assert posts[0].post_id == "snap001"
+        assert posts[0].location_name == "Times Square, NY"
+        assert posts[0].latitude == pytest.approx(40.758)
+
+    @pytest.mark.asyncio
+    async def test_search_handles_non_200(self):
+        from providers.snapchat import SnapchatProvider
+
+        mock_client = _mock_async_client(_mock_http_response({}, status_code=403))
+        with patch("providers.snapchat.httpx.AsyncClient", return_value=mock_client):
+            posts = await SnapchatProvider().search(PARAMS)
+
+        assert posts == []
+
+    def test_always_configured(self):
+        from providers.snapchat import SnapchatProvider
+        assert SnapchatProvider().is_configured() is True
+
+
+# ============================================================
+# Facebook
+# ============================================================
+
+
+class TestFacebookProvider:
+    @pytest.mark.asyncio
+    async def test_search_finds_places_and_posts(self):
+        from providers.facebook import FacebookProvider
+
+        places_response = _mock_http_response({
+            "data": [
+                {
+                    "id": "place001",
+                    "name": "Central Park",
+                    "location": {"latitude": 40.7851, "longitude": -73.9683},
+                }
+            ]
+        })
+
+        posts_response = _mock_http_response({
+            "data": [
+                {
+                    "id": "place001_post999",
+                    "message": "Beautiful day in Central Park!",
+                    "created_time": "2024-06-15T14:00:00+0000",
+                    "attachments": {"data": [{"media": {"image": {"src": "https://fb.com/img.jpg"}}}]},
+                }
+            ]
+        })
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(side_effect=[places_response, posts_response])
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("providers.facebook.config") as mock_config, \
+             patch("providers.facebook.httpx.AsyncClient", return_value=mock_client):
+            mock_config.get.side_effect = lambda s, k: "fake_id" if k == "app_id" else "fake_secret"
+            provider = FacebookProvider()
+            posts = await provider.search(PARAMS)
+
+        assert len(posts) == 1
+        assert posts[0].platform == "facebook"
+        assert posts[0].author == "Central Park"
+        assert posts[0].text == "Beautiful day in Central Park!"
+        assert posts[0].media_url == "https://fb.com/img.jpg"
+
+    @pytest.mark.asyncio
+    async def test_search_returns_empty_when_no_places(self):
+        from providers.facebook import FacebookProvider
+
+        mock_client = _mock_async_client(_mock_http_response({"data": []}))
+        with patch("providers.facebook.config") as mock_config, \
+             patch("providers.facebook.httpx.AsyncClient", return_value=mock_client):
+            mock_config.get.side_effect = lambda s, k: "id" if k == "app_id" else "secret"
+            posts = await FacebookProvider().search(PARAMS)
+
+        assert posts == []
+
+    def test_not_configured_without_credentials(self):
+        from providers.facebook import FacebookProvider
+
+        with patch("providers.facebook.config") as mock_config:
+            mock_config.get.return_value = ""
+            assert FacebookProvider().is_configured() is False
+
+    def test_configured_with_credentials(self):
+        from providers.facebook import FacebookProvider
+
+        with patch("providers.facebook.config") as mock_config:
+            mock_config.get.side_effect = lambda s, k: "val"
+            assert FacebookProvider().is_configured() is True

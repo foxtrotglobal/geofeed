@@ -131,6 +131,21 @@ button:disabled { opacity: 0.6; cursor: wait; }
   height: 100vh;
 }
 
+.live-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.live-label {
+  font-size: 0.82em;
+  color: #ccc;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 /* Leaflet popup styling */
 .popup { font-size: 0.85em; line-height: 1.4; }
 .popup img { display: block; }

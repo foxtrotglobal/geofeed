@@ -17,3 +17,21 @@ twitter:
 tiktok:
   # No API key needed — uses web scraping with reverse-geocoded place names
   ms_token: ""         # Optional: TikTok ms_token cookie for better results
+
+bluesky:
+  # No credentials needed for public search
+  identifier: ""       # Optional: your handle (e.g. you.bsky.social) for higher rate limits
+  app_password: ""     # Optional: Bluesky app password (Settings → App Passwords)
+
+mastodon:
+  instance: "mastodon.social"  # Mastodon instance to search (default: mastodon.social)
+  access_token: ""             # Optional: OAuth token for higher rate limits
+
+snapchat:
+  # No credentials needed — uses the public Snap Map endpoint
+
+facebook:
+  app_id: ""           # https://developers.facebook.com → Create App → App ID
+  app_secret: ""       # App Secret from the same page
+  # Note: public post search was removed in Graph API v2.0.
+  # This searches nearby Places and their public feeds.

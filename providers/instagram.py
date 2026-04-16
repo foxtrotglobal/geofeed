@@ -23,8 +23,15 @@ class InstagramProvider(BaseProvider):
     def is_configured(self) -> bool:
         return bool(self.cookie)
 
+    def _csrf_token(self) -> str:
+        """Extract csrftoken from the session cookie string."""
+        for part in self.cookie.split("; "):
+            if part.strip().startswith("csrftoken="):
+                return part.strip().split("=", 1)[1]
+        return ""
+
     def _headers(self) -> dict:
-        return {
+        headers = {
             "Cookie": self.cookie,
             "User-Agent": (
                 "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) "
@@ -33,7 +40,13 @@ class InstagramProvider(BaseProvider):
             ),
             "X-Ig-App-Id": "936619743392459",
             "X-Requested-With": "XMLHttpRequest",
+            "Referer": "https://www.instagram.com/",
+            "Origin": "https://www.instagram.com",
         }
+        csrf = self._csrf_token()
+        if csrf:
+            headers["X-Csrftoken"] = csrf
+        return headers
 
     async def search(self, params: SearchParams) -> list[GeoPost]:
         # Step 1: Find Instagram location IDs near the coordinates

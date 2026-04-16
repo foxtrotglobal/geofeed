@@ -16,7 +16,8 @@ twitter:
 
 tiktok:
   # No API key needed — uses web scraping with reverse-geocoded place names
-  ms_token: ""         # Optional: TikTok ms_token cookie for better results
+  ms_token: ""   # From browser: DevTools → Application → Cookies → tiktok.com → msToken
+  ttwid: ""      # From browser: DevTools → Application → Cookies → tiktok.com → ttwid
 
 bluesky:
   # No credentials needed for public search

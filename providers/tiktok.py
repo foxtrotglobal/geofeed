@@ -9,8 +9,11 @@ from geo import reverse_geocode
 from models import GeoPost, SearchParams
 from providers.base import BaseProvider
 
-# Unofficial TikTok web search endpoint
-SEARCH_URL = "https://www.tiktok.com/api/search/general/full/"
+# TikTok search endpoints to try in order
+SEARCH_URLS = [
+    "https://www.tiktok.com/api/search/item/full/",
+    "https://www.tiktok.com/api/search/general/full/",
+]
 
 
 class TikTokProvider(BaseProvider):
@@ -19,6 +22,7 @@ class TikTokProvider(BaseProvider):
 
     def __init__(self):
         self.ms_token = config.get("tiktok", "ms_token")
+        self.ttwid = config.get("tiktok", "ttwid")
 
     def is_configured(self) -> bool:
         # TikTok works without credentials (but may be rate-limited)
@@ -41,29 +45,36 @@ class TikTokProvider(BaseProvider):
         cookies = {}
         if self.ms_token:
             cookies["msToken"] = self.ms_token
+        if self.ttwid:
+            cookies["ttwid"] = self.ttwid
 
         query_params = {
             "keyword": keyword,
             "offset": 0,
             "count": min(params.max_results, 20),
             "search_id": "",
+            "type": 1,
         }
 
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    SEARCH_URL,
-                    params=query_params,
-                    headers=headers,
-                    cookies=cookies,
-                    timeout=15,
-                    follow_redirects=True,
-                )
-                if resp.status_code != 200:
-                    return []
-                data = resp.json()
-        except Exception:
-            # TikTok's unofficial API is unreliable
+        data = None
+        async with httpx.AsyncClient() as client:
+            for url in SEARCH_URLS:
+                try:
+                    resp = await client.get(
+                        url,
+                        params=query_params,
+                        headers=headers,
+                        cookies=cookies,
+                        timeout=12,
+                        follow_redirects=True,
+                    )
+                    if resp.status_code == 200 and resp.content:
+                        data = resp.json()
+                        if data.get("data"):
+                            break
+                except Exception:
+                    continue
+        if not data:
             return []
 
         posts = []

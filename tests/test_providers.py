@@ -602,49 +602,74 @@ class TestMastodonProvider:
 
 
 class TestSnapchatProvider:
-    @pytest.mark.asyncio
-    async def test_search_returns_posts(self):
+    def test_extract_items_stories_key(self):
         from providers.snapchat import SnapchatProvider
 
-        api_response = {
-            "elements": [
-                {
-                    "id": "snap001",
-                    "title": "Times Square",
-                    "timestamp": "1718450000000",
-                    "location": {"lat": 40.758, "lng": -73.9855},
-                    "placeInfo": {"name": "Times Square, NY"},
-                    "snapInfo": {
-                        "previewImageMediaInfo": {"mediaUrl": "https://snap.com/preview.jpg"}
-                    },
-                }
-            ]
-        }
-
-        mock_client = _mock_async_client(_mock_http_response(api_response))
-        with patch("providers.snapchat.httpx.AsyncClient", return_value=mock_client):
+        with patch("providers.snapchat.cfg") as mock_cfg:
+            mock_cfg.get.return_value = "test=cookie"
             provider = SnapchatProvider()
-            posts = await provider.search(PARAMS)
 
-        assert len(posts) == 1
-        assert posts[0].platform == "snapchat"
-        assert posts[0].post_id == "snap001"
-        assert posts[0].location_name == "Times Square, NY"
-        assert posts[0].latitude == pytest.approx(40.758)
+        data = {"stories": [{"id": "s1", "title": "Times Square"}]}
+        assert provider._extract_items(data) == [{"id": "s1", "title": "Times Square"}]
 
-    @pytest.mark.asyncio
-    async def test_search_handles_non_200(self):
+    def test_extract_items_elements_key(self):
         from providers.snapchat import SnapchatProvider
 
-        mock_client = _mock_async_client(_mock_http_response({}, status_code=403))
-        with patch("providers.snapchat.httpx.AsyncClient", return_value=mock_client):
-            posts = await SnapchatProvider().search(PARAMS)
+        with patch("providers.snapchat.cfg") as mock_cfg:
+            mock_cfg.get.return_value = "test=cookie"
+            provider = SnapchatProvider()
 
-        assert posts == []
+        data = {"elements": [{"id": "e1"}]}
+        assert provider._extract_items(data) == [{"id": "e1"}]
 
-    def test_always_configured(self):
+    def test_parse_item_returns_geopost(self):
         from providers.snapchat import SnapchatProvider
-        assert SnapchatProvider().is_configured() is True
+
+        with patch("providers.snapchat.cfg") as mock_cfg:
+            mock_cfg.get.return_value = "test=cookie"
+            provider = SnapchatProvider()
+
+        item = {
+            "id": "snap001",
+            "title": "Times Square",
+            "lat": 40.758,
+            "lng": -73.9855,
+            "placeInfo": {"name": "Times Square, NY"},
+            "thumbnailUrl": "https://snap.com/preview.jpg",
+            "timestamp": "1718450000000",
+        }
+        post = provider._parse_item(item, PARAMS, "New York")
+        assert post is not None
+        assert post.platform == "snapchat"
+        assert post.post_id == "snap001"
+        assert post.location_name == "Times Square, NY"
+        assert post.latitude == pytest.approx(40.758)
+        assert post.media_url == "https://snap.com/preview.jpg"
+
+    def test_parse_item_returns_none_without_id(self):
+        from providers.snapchat import SnapchatProvider
+
+        with patch("providers.snapchat.cfg") as mock_cfg:
+            mock_cfg.get.return_value = "test=cookie"
+            provider = SnapchatProvider()
+
+        assert provider._parse_item({"title": "No ID"}, PARAMS, "NYC") is None
+
+    def test_not_configured_without_cookie(self):
+        from providers.snapchat import SnapchatProvider
+
+        with patch("providers.snapchat.cfg") as mock_cfg:
+            mock_cfg.get.return_value = ""
+            assert SnapchatProvider().is_configured() is False
+
+    def test_configured_with_cookie_and_playwright(self):
+        from providers.snapchat import SnapchatProvider
+
+        with patch("providers.snapchat.cfg") as mock_cfg:
+            mock_cfg.get.return_value = "sc-a=test"
+            provider = SnapchatProvider()
+            # playwright is installed in this venv
+            assert provider.is_configured() is True
 
 
 # ============================================================

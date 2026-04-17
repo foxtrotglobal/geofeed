@@ -285,7 +285,31 @@ All providers implement the same `BaseProvider` interface and run in parallel vi
 3. Register it in `server.py` and `main.py` under `ALL_PROVIDERS`
 
 ## Deployment
-### Option A — VPS (Ubuntu 22.04+)
+### Option A — Automated script (recommended)
+A single script handles everything on a fresh Ubuntu 22.04+ / Debian 12+ server:
+```bash
+curl -fsSL https://raw.githubusercontent.com/foxtrotglobal/geofeed/main/deploy.sh | sudo bash
+```
+The script will prompt for your domain name and API keys, then automatically:
+- Install Python, Nginx, Certbot, and Playwright browser dependencies
+- Create a dedicated `geofeed` system user
+- Clone the repo, set up the virtual environment, install all dependencies
+- Write `config.yaml` with your credentials (permissions: 600)
+- Create and enable a systemd service
+- Configure Nginx with SSE-safe reverse proxy settings
+- Optionally obtain a free Let's Encrypt HTTPS certificate
+- Configure the UFW firewall
+
+**Non-interactive** (CI / infrastructure-as-code):
+```bash
+sudo DOMAIN=geofeed.example.com \
+     YOUTUBE_API_KEY=yourkey \
+     TWITTER_BEARER_TOKEN=yourtoken \
+     bash deploy.sh
+```
+See [`deploy.sh`](deploy.sh) for the full list of supported environment variables.
+
+### Option B — Manual VPS (Ubuntu 22.04+)
 **1. Clone and set up:**
 ```bash
 git clone https://github.com/foxtrotglobal/geofeed.git
@@ -357,24 +381,20 @@ sudo ufw delete allow 5000
 sudo systemctl status nginx geofeed
 curl -I https://yourdomain.com
 ```
-### Option B — Docker
-Add a `Dockerfile` to the project root:
-```dockerfile
-FROM python:3.12-slim
-WORKDIR /app
-COPY . .
-RUN pip install -r requirements.txt gunicorn
-EXPOSE 5000
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "server:app"]
-```
+### Option C — Docker
 ```bash
+# Build and run (config.yaml mounted as read-only volume)
+docker-compose up -d
+
+# Or manually with env vars (no config.yaml needed)
 docker build -t geofeed .
 docker run -p 5000:5000 \
   -e YOUTUBE_API_KEY=your_key \
-  -e FLICKR_API_KEY=your_key \
+  -e TWITTER_BEARER_TOKEN=your_token \
   geofeed
 ```
-### Option C — Render / Railway / Heroku
+
+### Option D — Render / Railway / Heroku
 Set your API keys as environment variables on the platform dashboard (no `config.yaml` needed — the app reads env vars automatically). Use this start command:
 ```
 gunicorn -w 2 -b 0.0.0.0:$PORT server:app

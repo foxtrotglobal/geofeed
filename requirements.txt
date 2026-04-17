@@ -2,3 +2,6 @@ flask>=3.0
 httpx>=0.27
 pyyaml>=6.0
 playwright>=1.40
+
+# Documentation (optional — only needed to build/serve docs locally)
+# mkdocs-material>=9.0

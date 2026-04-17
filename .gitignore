@@ -23,3 +23,6 @@ Thumbs.db
 
 # Output
 results.json
+
+# Docker
+# (docker-compose.yml and Dockerfile are tracked)

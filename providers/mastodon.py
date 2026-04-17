@@ -24,24 +24,33 @@ class MastodonProvider(BaseProvider):
 
     async def search(self, params: SearchParams) -> list[GeoPost]:
         place_name = await reverse_geocode(params.latitude, params.longitude)
-        query = f"{params.keyword} {place_name}".strip() if params.keyword else place_name
+        # Use place name as a hashtag (most reliable public endpoint without auth)
+        hashtag = place_name.replace(" ", "").lower()
 
-        url = f"https://{self.instance}/api/v2/search"
-        headers = {}
+        headers = {"User-Agent": "GeoFeed/1.2"}
         if self.access_token:
             headers["Authorization"] = f"Bearer {self.access_token}"
 
-        query_params = {
-            "q": query,
-            "type": "statuses",
-            "limit": min(params.max_results, 40),
-            "resolve": "false",
-        }
+        # Try hashtag timeline first (public, no auth required)
+        posts = await self._hashtag_timeline(hashtag, place_name, params, headers)
 
+        # If keyword given, also try public timeline filtered by keyword
+        if not posts and params.keyword:
+            posts = await self._public_timeline(params.keyword, place_name, params, headers)
+
+        return posts
+
+    async def _hashtag_timeline(
+        self, hashtag: str, place_name: str, params: SearchParams, headers: dict
+    ) -> list[GeoPost]:
+        url = f"https://{self.instance}/api/v1/timelines/tag/{hashtag}"
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(
-                    url, params=query_params, headers=headers, timeout=15
+                    url,
+                    params={"limit": min(params.max_results, 40), "local": "false"},
+                    headers=headers,
+                    timeout=15,
                 )
                 if resp.status_code != 200:
                     return []
@@ -49,8 +58,34 @@ class MastodonProvider(BaseProvider):
         except Exception:
             return []
 
+        return self._parse_statuses(data, place_name, params)
+
+    async def _public_timeline(
+        self, keyword: str, place_name: str, params: SearchParams, headers: dict
+    ) -> list[GeoPost]:
+        """Authenticated search fallback when token is available."""
+        if not self.access_token:
+            return []
+        url = f"https://{self.instance}/api/v2/search"
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    url,
+                    params={"q": keyword, "type": "statuses", "limit": 20, "resolve": "false"},
+                    headers=headers,
+                    timeout=15,
+                )
+                if resp.status_code != 200:
+                    return []
+                data = resp.json()
+        except Exception:
+            return []
+        return self._parse_statuses(data.get("statuses", []), place_name, params)
+
+    def _parse_statuses(self, statuses: list, place_name: str, params: SearchParams) -> list[GeoPost]:
+        """Shared status parser."""
         posts = []
-        for status in data.get("statuses", []):
+        for status in statuses:
             account = status.get("account", {})
 
             created_at = None
@@ -86,9 +121,9 @@ class MastodonProvider(BaseProvider):
                 url=status.get("url", ""),
                 text=text,
                 author=account.get("acct", ""),
-                latitude=lat,
-                longitude=lon,
-                location_name=loc_name,
+                latitude=params.latitude,
+                longitude=params.longitude,
+                location_name=place_name,
                 media_url=thumb,
                 timestamp=created_at,
             )

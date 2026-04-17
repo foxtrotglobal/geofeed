@@ -16,7 +16,8 @@ twitter:
 
 tiktok:
   # No API key needed — uses web scraping with reverse-geocoded place names
-  ms_token: ""         # Optional: TikTok ms_token cookie for better results
+  ms_token: ""   # From browser: DevTools → Application → Cookies → tiktok.com → msToken
+  ttwid: ""      # From browser: DevTools → Application → Cookies → tiktok.com → ttwid
 
 bluesky:
   # No credentials needed for public search
@@ -28,7 +29,12 @@ mastodon:
   access_token: ""             # Optional: OAuth token for higher rate limits
 
 snapchat:
-  # No credentials needed — uses the public Snap Map endpoint
+  # Requires Playwright (pip install playwright && playwright install chromium)
+  # AND a Snapchat session cookie from map.snapchat.com
+  # 1. Log in to Snapchat in Chrome and visit https://map.snapchat.com/
+  # 2. F12 -> Network -> any map.snapchat.com request -> Headers -> copy 'cookie:' value
+  # 3. Paste below (same format as Instagram session_cookie)
+  session_cookie: ""
 
 facebook:
   app_id: ""           # https://developers.facebook.com → Create App → App ID

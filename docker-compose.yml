@@ -1,0 +1,13 @@
+services:
+  geofeed:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      # Mount config.yaml at runtime — never bake secrets into the image
+      - ./config.yaml:/app/config.yaml:ro
+    restart: unless-stopped
+    environment:
+      # Alternatively, pass API keys as env vars here or via a .env file
+      # YOUTUBE_API_KEY: ""
+      # FLICKR_API_KEY: ""

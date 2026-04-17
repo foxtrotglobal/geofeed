@@ -25,13 +25,16 @@ def load_config(path: Path | None = None) -> dict:
 
 
 def get(section: str, key: str, default: str = "") -> str:
-    """Get a config value, falling back to environment variables then default."""
+    """Get a config value. Environment variables take precedence over config.yaml."""
     if not _config:
         load_config()
-    # Try config file first
+    # Check environment variable first — allows production secrets to override config.yaml
+    env_key = f"{section.upper()}_{key.upper()}"
+    env_val = os.environ.get(env_key, "")
+    if env_val:
+        return env_val
+    # Fall back to config file
     val = _config.get(section, {}).get(key, "")
     if val:
         return str(val)
-    # Try environment variable: SECTION_KEY (e.g. YOUTUBE_API_KEY)
-    env_key = f"{section.upper()}_{key.upper()}"
-    return os.environ.get(env_key, default)
+    return default

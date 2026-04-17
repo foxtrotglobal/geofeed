@@ -22,34 +22,51 @@ class TwitterProvider(BaseProvider):
         return bool(self.bearer_token)
 
     async def search(self, params: SearchParams) -> list[GeoPost]:
-        # Twitter API v2 point_radius: longitude,latitude,radius
-        # Max radius = 25mi. Convert km to mi (capped at 25).
-        radius_mi = min(params.radius_km * 0.621371, 25)
-
-        # Build query
-        geo_part = f"point_radius:[{params.longitude} {params.latitude} {radius_mi:.1f}mi]"
-        query = f"{params.keyword} {geo_part}".strip() if params.keyword else geo_part
-
         headers = {"Authorization": f"Bearer {self.bearer_token}"}
+
+        # Try geo query first (requires Elevated access)
+        radius_mi = min(params.radius_km * 0.621371, 25)
+        geo_part = f"point_radius:[{params.longitude} {params.latitude} {radius_mi:.1f}mi]"
+        geo_query = f"{params.keyword} {geo_part}".strip() if params.keyword else geo_part
+
+        data = await self._query(geo_query, params.max_results, headers)
+
+        # Fall back to keyword-only search (free tier) when geo fails
+        if data is None:
+            from geo import reverse_geocode
+            place_name = await reverse_geocode(params.latitude, params.longitude)
+            fallback_query = f"{params.keyword} {place_name}".strip() if params.keyword else place_name
+            data = await self._query(fallback_query, params.max_results, headers)
+
+        if not data:
+            return []
+
+        return self._parse(data)
+
+    async def _query(self, query: str, max_results: int, headers: dict) -> dict | None:
+        """Run a search query, returning None if the tier doesn't support it."""
         query_params = {
             "query": query,
-            "max_results": min(params.max_results, 100),
+            "max_results": min(max(max_results, 10), 100),
             "tweet.fields": "created_at,geo,author_id,text",
             "expansions": "author_id,geo.place_id",
             "place.fields": "full_name,geo",
             "user.fields": "username",
         }
-
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                SEARCH_URL, params=query_params, headers=headers, timeout=15
-            )
-            if resp.status_code == 403:
-                # Geo queries require Elevated or Academic access
-                return []
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    SEARCH_URL, params=query_params, headers=headers, timeout=15
+                )
+            if resp.status_code in (402, 403):
+                return None  # Tier limitation
             resp.raise_for_status()
-            data = resp.json()
+            return resp.json()
+        except Exception:
+            return None
 
+    def _parse(self, data: dict) -> list[GeoPost]:
+        """Parse API response into GeoPosts."""
         # Build lookup maps for includes
         users = {}
         for u in data.get("includes", {}).get("users", []):

@@ -150,3 +150,110 @@ class TestReverseGeocode:
         with patch("geo.httpx.AsyncClient", return_value=mock_client):
             result = await reverse_geocode(0.0, 0.0)
             assert result == "Middle of Nowhere"
+
+    @pytest.mark.asyncio
+    async def test_reverse_geocode_falls_back_to_village(self):
+        mock_client = self._mock_geocode_client({
+            "address": {"village": "Smallton"},
+            "display_name": "Smallton, Nowhere",
+        })
+        with patch("geo.httpx.AsyncClient", return_value=mock_client):
+            result = await reverse_geocode(10.0, 10.0)
+            assert result == "Smallton"
+
+    @pytest.mark.asyncio
+    async def test_reverse_geocode_coordinates_in_query(self):
+        """Verify the correct coordinates are sent to the API."""
+        mock_client = self._mock_geocode_client({"address": {"city": "X"}, "display_name": "X"})
+        with patch("geo.httpx.AsyncClient", return_value=mock_client):
+            await reverse_geocode(51.5074, -0.1278)
+            call_kwargs = mock_client.get.call_args
+            params = call_kwargs[1].get("params") or call_kwargs[0][1]
+            assert params["lat"] == 51.5074
+            assert params["lon"] == -0.1278
+
+
+# --- GeoPost edge cases ---
+
+
+class TestGeoPostEdgeCases:
+    def test_url_is_required_field(self):
+        """URL is a required positional field."""
+        p = GeoPost(platform="test", post_id="1", url="")
+        assert p.url == ""
+
+    def test_to_dict_with_naive_datetime(self):
+        """Naive datetimes are serialized without timezone info."""
+        ts = datetime(2024, 1, 15, 10, 30)  # no tzinfo
+        p = GeoPost(platform="test", post_id="1", url="", timestamp=ts)
+        d = p.to_dict()
+        assert "2024-01-15" in d["timestamp"]
+
+    def test_to_dict_preserves_all_fields(self):
+        ts = datetime(2024, 6, 1, tzinfo=timezone.utc)
+        p = GeoPost(
+            platform="youtube",
+            post_id="abc",
+            url="https://youtube.com/abc",
+            text="Hello",
+            author="user1",
+            latitude=40.0,
+            longitude=-74.0,
+            location_name="NYC",
+            media_url="https://img.jpg",
+            timestamp=ts,
+            distance_km=2.5,
+            extra={"views": 100},
+        )
+        d = p.to_dict()
+        assert d["platform"] == "youtube"
+        assert d["text"] == "Hello"
+        assert d["latitude"] == 40.0
+        assert d["distance_km"] == 2.5
+        assert d["extra"] == {"views": 100}
+
+    def test_to_dict_null_fields_preserved(self):
+        p = GeoPost(platform="test", post_id="1", url="")
+        d = p.to_dict()
+        assert d["latitude"] is None
+        assert d["longitude"] is None
+        assert d["timestamp"] is None
+        assert d["distance_km"] is None
+
+    def test_two_instances_do_not_share_extra_dict(self):
+        a = GeoPost(platform="a", post_id="1", url="")
+        b = GeoPost(platform="b", post_id="2", url="")
+        a.extra["x"] = 1
+        b.extra["y"] = 2
+        assert "y" not in a.extra
+        assert "x" not in b.extra
+
+
+# --- Haversine edge cases ---
+
+
+class TestHaversineEdgeCases:
+    def test_antipodal_points(self):
+        """Maximum possible distance ≈ half Earth circumference ≈ 20,015 km."""
+        dist = haversine(0.0, 0.0, 0.0, 180.0)
+        assert 20000 < dist < 20100
+
+    def test_north_pole_to_south_pole(self):
+        """Pole-to-pole distance ≈ 20,015 km."""
+        dist = haversine(90.0, 0.0, -90.0, 0.0)
+        assert 19900 < dist < 20100
+
+    def test_crossing_international_date_line(self):
+        """Short distance across the date line — should not be huge."""
+        # Two points just either side of the 180° line
+        dist = haversine(0.0, 179.9, 0.0, -179.9)
+        assert dist < 30  # Should be ~22 km, not thousands
+
+    def test_equatorial_one_degree(self):
+        """One degree of longitude at the equator ≈ 111 km."""
+        dist = haversine(0.0, 0.0, 0.0, 1.0)
+        assert 110 < dist < 113
+
+    def test_returns_float(self):
+        result = haversine(40.0, -74.0, 51.5, -0.1)
+        assert isinstance(result, float)

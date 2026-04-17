@@ -116,6 +116,19 @@ def search():
     return jsonify({"posts": posts, "count": len(posts)})
 
 
+@app.route("/api/geocode")
+def geocode():
+    """Geocode a place name (city, state, country) to lat/lon."""
+    place = request.args.get("q", "").strip()
+    if not place:
+        return jsonify({"error": "Missing query parameter ?q="}), 400
+    from geo import forward_geocode
+    result = get_or_create_event_loop().run_until_complete(forward_geocode(place))
+    if not result:
+        return jsonify({"error": f"Location not found: {place}"}), 404
+    return jsonify(result)
+
+
 @app.route("/api/providers")
 def list_providers():
     """List available providers and whether they are configured."""

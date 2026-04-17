@@ -13,12 +13,23 @@
     <p class="subtitle">Search social media by location</p>
 
     <form id="search-form">
-      <label>Latitude
-        <input type="number" id="lat" step="any" placeholder="e.g. 40.7128" required />
+      <label>📍 Location
+        <div style="display:flex;gap:6px">
+          <input type="text" id="place" placeholder="City, state, or country" style="flex:1" />
+          <button type="button" id="geocode-btn" style="width:auto;padding:8px 12px;font-size:0.85em">Go</button>
+        </div>
+        <small id="place-status" style="color:#a5b4fc;font-size:0.75em"></small>
       </label>
-      <label>Longitude
-        <input type="number" id="lng" step="any" placeholder="e.g. -74.0060" required />
-      </label>
+
+      <div style="display:flex;gap:8px">
+        <label style="flex:1">Latitude
+          <input type="number" id="lat" step="any" placeholder="40.7128" required />
+        </label>
+        <label style="flex:1">Longitude
+          <input type="number" id="lng" step="any" placeholder="-74.0060" required />
+        </label>
+      </div>
+
       <label>Radius (km)
         <input type="number" id="radius" value="10" min="1" max="100" />
       </label>
@@ -97,6 +108,35 @@
     map.on('click', function(e) {
       document.getElementById('lat').value = e.latlng.lat.toFixed(6);
       document.getElementById('lng').value = e.latlng.lng.toFixed(6);
+      document.getElementById('place').value = '';
+      document.getElementById('place-status').textContent = '';
+    });
+
+    // --- Place name geocoding ---
+    async function geocodePlace() {
+      const place = document.getElementById('place').value.trim();
+      if (!place) return;
+      const statusEl = document.getElementById('place-status');
+      statusEl.textContent = '⏳ Looking up...';
+      try {
+        const resp = await fetch(`/api/geocode?q=${encodeURIComponent(place)}`);
+        if (!resp.ok) {
+          statusEl.textContent = '❌ Location not found';
+          return;
+        }
+        const data = await resp.json();
+        document.getElementById('lat').value = data.lat.toFixed(6);
+        document.getElementById('lng').value = data.lon.toFixed(6);
+        map.setView([data.lat, data.lon], 12);
+        statusEl.textContent = `✓ ${data.display_name.split(',').slice(0,3).join(',')}` ;
+      } catch(e) {
+        statusEl.textContent = '❌ Geocoding failed';
+      }
+    }
+
+    document.getElementById('geocode-btn').addEventListener('click', geocodePlace);
+    document.getElementById('place').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); geocodePlace(); }
     });
 
     // --- Helpers ---

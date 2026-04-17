@@ -17,6 +17,24 @@ def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return EARTH_RADIUS_KM * 2 * math.asin(math.sqrt(a))
 
 
+async def forward_geocode(place: str) -> dict | None:
+    """Forward-geocode a place name (city, state, country) to lat/lon."""
+    url = "https://nominatim.openstreetmap.org/search"
+    params = {"q": place, "format": "json", "limit": 1}
+    headers = {"User-Agent": "GeoFeed/1.0"}
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(url, params=params, headers=headers, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+    if not data:
+        return None
+    return {
+        "lat": float(data[0]["lat"]),
+        "lon": float(data[0]["lon"]),
+        "display_name": data[0].get("display_name", place),
+    }
+
+
 async def reverse_geocode(lat: float, lon: float) -> str:
     """Reverse-geocode coordinates to a place name using Nominatim."""
     url = "https://nominatim.openstreetmap.org/reverse"

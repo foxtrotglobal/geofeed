@@ -302,6 +302,110 @@ geofeed/
 
 All providers implement the same `BaseProvider` interface and run in parallel via `asyncio.gather()`. Each returns a list of `GeoPost` objects with a unified schema (platform, coordinates, text, author, timestamp, media URL, etc.).
 
+## Getting Started (Development)
+
+This guide gets you from zero to a running local dev environment with tests passing in under 5 minutes. No API keys required to run the test suite.
+
+### 1. Clone and set up
+
+```bash
+git clone https://github.com/foxtrotglobal/geofeed.git
+cd geofeed
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+```
+
+### 2. Install dependencies
+
+```bash
+pip install -r requirements.txt
+pip install pytest pytest-asyncio  # test runner
+
+# Optional: only needed for Snapchat
+playwright install chromium
+```
+
+### 3. Run the test suite
+
+```bash
+pytest -v
+```
+
+All 169 tests should pass. No API keys needed — all HTTP is mocked.
+
+```
+169 passed in ~9s
+```
+
+### 4. Start the dev server
+
+```bash
+# Without any config — Bluesky, Mastodon, Reddit, Telegram, Aparat work out of the box
+python main.py --server
+```
+
+Open [http://localhost:5000](http://localhost:5000), click the map, and search. Flask runs in debug mode locally so it auto-reloads on file changes.
+
+### 5. Add credentials for more platforms (optional)
+
+```bash
+cp config.yaml.example config.yaml
+# Edit config.yaml — add keys only for platforms you want to test
+```
+
+Restart the server after editing `config.yaml`. Platforms without credentials are skipped silently.
+
+### 6. Test a single provider in isolation
+
+```bash
+# Run one provider manually without the web UI
+python -c "
+import asyncio, sys
+sys.path.insert(0, '.')
+import config; config.load_config()
+from providers.bluesky import BlueskyProvider
+from models import SearchParams
+
+async def test():
+    posts = await BlueskyProvider().search(
+        SearchParams(latitude=40.7128, longitude=-74.006, radius_km=5, keyword='New York')
+    )
+    for p in posts[:3]:
+        print(f'  [{p.platform}] @{p.author}: {p.text[:60]}')
+
+asyncio.run(test())
+"
+```
+
+### 7. Run a specific test file
+
+```bash
+pytest tests/test_providers.py -v        # all provider tests
+pytest tests/test_api.py -v             # Flask API tests
+pytest tests/test_core.py::TestConcurrentExecution -v  # specific class
+pytest -k "bluesky or mastodon" -v      # filter by name
+```
+
+### 8. Verify the API endpoint locally
+
+```bash
+# Start the server in the background, then:
+curl -s -X POST http://localhost:5000/api/search \
+  -H "Content-Type: application/json" \
+  -d '{"latitude": 40.7128, "longitude": -74.006, "radius_km": 5,
+       "platforms": ["bluesky", "mastodon", "reddit"]}' | python -m json.tool
+```
+
+### Common pitfalls
+
+| Problem | Fix |
+|---|---|
+| `ModuleNotFoundError: No module named 'flask'` | Activate the venv: `source .venv/bin/activate` |
+| Test fails with `AssertionError` on config values | Another test may have left `config._config` dirty; run `pytest -p no:randomly` |
+| Playwright error on Snapchat tests | Run `playwright install chromium` once |
+| Server returns empty results | Check `config.yaml` — platforms without credentials are skipped |
+| SSE live mode doesn't stream in browser | Run behind Nginx with `proxy_buffering off`; Flask dev server works fine |
+
 ## For Contributors
 
 This section explains the key design decisions to help you understand the codebase quickly.

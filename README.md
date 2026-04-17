@@ -302,11 +302,130 @@ geofeed/
 
 All providers implement the same `BaseProvider` interface and run in parallel via `asyncio.gather()`. Each returns a list of `GeoPost` objects with a unified schema (platform, coordinates, text, author, timestamp, media URL, etc.).
 
+## For Contributors
+
+This section explains the key design decisions to help you understand the codebase quickly.
+
+### Data model
+
+Every platform returns a list of `GeoPost` objects — a single unified schema regardless of source:
+
+```python
+@dataclass
+class GeoPost:
+    platform: str           # "youtube", "instagram", etc.
+    post_id: str            # platform-native ID
+    url: str                # direct link to the post
+    text: str = ""
+    author: str = ""
+    latitude: float | None = None
+    longitude: float | None = None
+    location_name: str = ""
+    media_url: str = ""
+    timestamp: datetime | None = None
+    distance_km: float | None = None
+    extra: dict = field(default_factory=dict)
+```
+
+`GeoPost.to_dict()` produces the JSON sent to the frontend. The `extra` dict holds platform-specific fields (e.g. `{"subreddit": "iran"}`) without polluting the schema.
+
+### Provider interface
+
+Every provider subclasses `BaseProvider` and implements two methods:
+
+```python
+class BaseProvider(ABC):
+    name: str   # registry key, must match ALL_PROVIDERS key
+    color: str  # unique hex color for map markers
+
+    @abstractmethod
+    async def search(self, params: SearchParams) -> list[GeoPost]: ...
+
+    def is_configured(self) -> bool: ...
+```
+
+`is_configured()` returning `False` causes the provider to be silently skipped — no error, no empty result entry in the API response. This lets users add only the credentials they have.
+
+### Parallel execution
+
+`server.run_search()` wraps every provider call in `_safe_search()` — which catches any exception and returns `[]` — then gathers all providers concurrently:
+
+```python
+async def run_search(params, platform_names):
+    tasks = [_safe_search(cls(), params)
+             for name, cls in ALL_PROVIDERS.items()
+             if name in platform_names and cls().is_configured()]
+    results = await asyncio.gather(*tasks)
+    posts = [p for batch in results for p in batch]
+    return sorted(posts, key=lambda p: p.get("timestamp") or "", reverse=True)
+```
+
+Flask is synchronous, so `server.py` calls `loop.run_until_complete(run_search(...))` via `get_or_create_event_loop()` to bridge sync→async.
+
+### SSE live mode
+
+The `/api/stream` endpoint is a Flask streaming `Response` with `mimetype="text/event-stream"`. It runs the search in a loop, deduplicates by `post_id`, and emits only new posts:
+
+```python
+def generate():
+    seen_ids = set()
+    while True:
+        posts = loop.run_until_complete(run_search(params, platforms))
+        new = [p for p in posts if p["post_id"] not in seen_ids]
+        seen_ids.update(p["post_id"] for p in new)
+        yield f"data: {json.dumps(new)}\n\n"
+        time.sleep(interval)
+```
+
+> **Nginx requirement:** `proxy_buffering off` in the Nginx config is mandatory — without it, SSE data is buffered and never delivered to the browser.
+
+### Geo strategy by tier
+
+| Tier | Platforms | How it works |
+|---|---|---|
+| **Native radius** | YouTube, Flickr, Twitter, Snapchat, Instagram | Direct lat/lon/radius query to the platform API |
+| **Venue-based** | Instagram, Facebook, Snapchat | Find nearby venues, then fetch posts tagged there |
+| **Reverse geocode** | Bluesky, Mastodon, Telegram, Reddit, TikTok, Aparat, Rubika | `geo.reverse_geocode(lat, lon)` → Nominatim → place name → keyword search |
+
+`geo.haversine()` is used by several providers to filter venues by actual distance before returning posts.
+
+### Playwright (Snapchat)
+
+Snap Map is JavaScript-rendered and requires authentication. The Snapchat provider:
+1. Launches headless Chromium via `playwright.async_api`
+2. Injects session cookies from `config.yaml`
+3. Navigates to `map.snapchat.com/?lng=...&lat=...`
+4. Intercepts all JSON responses from `snapchat.com` matching story URL patterns
+5. Parses the intercepted data into `GeoPost` objects
+
+### Config loading
+
+`config.get(section, key)` checks environment variables **before** `config.yaml`. The env var format is `SECTION_KEY` uppercase (e.g. `YOUTUBE_API_KEY`). This allows production deployments to override local config without changing the file.
+
+### Test strategy
+
+All 169 tests mock HTTP at the `httpx.AsyncClient` level — no real network calls, no API keys needed.
+
+| File | What it tests |
+|---|---|
+| `test_providers.py` | Each provider's response parsing with mocked HTTP |
+| `test_models_and_geo.py` | `GeoPost` serialization, `haversine` edge cases |
+| `test_api.py` | Flask routes, 400 errors, request/response contract |
+| `test_config.py` | YAML loading, env var override precedence |
+| `test_integration.py` | `run_search` orchestration, provider error isolation |
+| `test_core.py` | Concurrent execution timing, SSE wire format, CLI flags |
+
+The concurrency test verifies providers actually run in parallel (3×0.1s providers must complete in <0.24s). The SSE test validates the `data: <json>\n\n` wire format.
+
 ## Adding a New Provider
 
-1. Create `providers/myplatform.py`
-2. Subclass `BaseProvider` and implement `search()` and `is_configured()`
-3. Register it in `server.py` and `main.py` under `ALL_PROVIDERS`
+1. Create `providers/myplatform.py` — subclass `BaseProvider`, implement `search()` and `is_configured()`
+2. Register it in `server.py` and `main.py` under `ALL_PROVIDERS`
+3. Add credentials to `config.yaml.example`
+4. Add map UI checkbox + hex color to `templates/map.html`
+5. Write tests in `tests/test_providers.py` using mocked HTTP responses
+
+See the [full guide →](https://foxtrotglobal.github.io/geofeed/reference/new-provider/)
 
 ## Deployment
 ### Option A — Automated script (recommended)

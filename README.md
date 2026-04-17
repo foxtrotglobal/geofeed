@@ -1,23 +1,24 @@
 # GeoFeed
 
-![Tests](https://github.com/foxtrotglobal/geofeed/actions/workflows/tests.yml/badge.svg)
-![Python](https://img.shields.io/badge/python-3.11+-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+[![Tests](https://github.com/foxtrotglobal/geofeed/actions/workflows/tests.yml/badge.svg)](https://github.com/foxtrotglobal/geofeed/actions)
+[![Docs](https://img.shields.io/badge/docs-foxtrotglobal.github.io%2Fgeofeed-blue)](https://foxtrotglobal.github.io/geofeed/)
+[![Python](https://img.shields.io/badge/python-3.11+-blue)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/foxtrotglobal/geofeed)](https://github.com/foxtrotglobal/geofeed/releases)
 
-## About
+> **[Full documentation → foxtrotglobal.github.io/geofeed](https://foxtrotglobal.github.io/geofeed/)**
 
-GeoFeed is an open-source Python tool that searches **13 social media platforms** simultaneously for public content posted near a pair of GPS coordinates. Results are aggregated into a unified format and displayed as color-coded markers on an interactive map, with clickable popups showing post previews, thumbnails, authors, and timestamps.
+GeoFeed searches **13 social media platforms** simultaneously for public content posted near GPS coordinates and displays results on an interactive map.
 
-It is designed for researchers, journalists, OSINT investigators, event monitors, or anyone who wants to understand what is being posted in a specific physical location across multiple platforms at once — including platforms popular in the Middle East and Iran (Telegram, Aparat, Rubika).
+Designed for researchers, journalists, OSINT investigators, and event monitors — including platforms popular in the Middle East and Iran (Telegram, Aparat, Rubika).
 
 **Key features:**
-- Search 13 platforms in parallel with a single command
-- Interactive Leaflet.js map with color-coded markers per platform
-- **Live mode** — SSE streaming pushes new results to the map automatically every N seconds
-- CLI for scripting and JSON export, or a web UI for visual exploration
-- Pluggable provider architecture — easy to add new platforms
-- 59-test suite with fully mocked HTTP — no API keys needed to run tests
-- No database required — stateless, runs locally
+- 13 platforms queried in parallel — YouTube, Instagram, Twitter/X, Bluesky, Mastodon, Telegram, Reddit, Snapchat, TikTok, Flickr, Facebook, Aparat, Rubika
+- Interactive Leaflet.js map with color-coded markers and clickable post previews
+- **Live mode** — SSE streams new results to the map automatically
+- CLI with JSON export, or web UI
+- 169-test suite — all HTTP mocked, no API keys needed to run
+- No database — stateless, runs locally or on a $5 VPS
 
 ## Supported Platforms
 
@@ -36,6 +37,29 @@ It is designed for researchers, journalists, OSINT investigators, event monitors
 | **Facebook** | Graph API Place search + feed | Nearby venues | App ID + App Secret |
 | **Aparat** | Iranian video platform search (aparat.com) | Approximate | None |
 | **Rubika** | Iranian social network keyword search | Approximate | None |
+
+## Quick start
+
+**Deploy to a server (one command):**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/foxtrotglobal/geofeed/main/deploy.sh | sudo bash
+```
+
+The script sets up Python, Nginx, HTTPS, systemd, and Playwright automatically. See [Deployment docs →](https://foxtrotglobal.github.io/geofeed/deployment/automated/)
+
+**Run locally:**
+
+```bash
+git clone https://github.com/foxtrotglobal/geofeed.git
+cd geofeed
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt && playwright install chromium
+cp config.yaml.example config.yaml   # add your API keys
+python main.py --server              # open http://localhost:5000
+```
+
+See [Installation →](https://foxtrotglobal.github.io/geofeed/installation/) and [Configuration →](https://foxtrotglobal.github.io/geofeed/configuration/) for full setup details.
 
 ## Installation
 
